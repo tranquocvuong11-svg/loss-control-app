@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Thái Bình Smart - Quản lý Tổn thất TBA</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+    </style>
+</head>
+<body class="bg-slate-50">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo, useRef } = React;
+        
+        // Khai báo các Icon từ Lucide
+        const { 
+            Search, Upload, Save, Image: ImageIcon, AlertTriangle, CheckCircle, 
+            Edit3, Camera, FileText, Layers, Zap, ExternalLink, Download, Plus, HardDrive, Database
+        } = lucide;
+
+        const App = () => {
+            const [data, setData] = useState([]);
+            const [searchTerm, setSearchTerm] = useState('');
+            const [selectedStation, setSelectedStation] = useState(null);
+            const [filterType, setFilterType] = useState('all'); 
+            const [isEditing, setIsEditing] = useState(false);
+            const [activeTab, setActiveTab] = useState('info');
+            const fileInputRef = useRef(null);
+
+            // Tự động load dữ liệu cũ nếu có
+            useEffect(() => {
+                const saved = localStorage.getItem('thaibinh_data_v2');
+                if (saved) setData(JSON.parse(saved));
+            }, []);
+
+            // Xử lý đọc file CSV
+            const handleFileUpload = (event) => {
+                const file = event.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const text = e.target.result;
+                    const rows = text.split('\n').slice(13); // Bỏ qua header Excel
+                    const parsed = rows.map(row => {
+                        const cols = row.split(',');
+                        if (cols.length < 10) return null;
+                        return {
+                            id: cols[1]?.replace(/"/g, '') || '',
+                            name: cols[2]?.replace(/"/g, '') || '',
+                            capacity: cols[3] || '---',
+                            lossPercent: parseFloat(cols[15]) || 0,
+                            lossKwh: cols[14] || '0',
+                            reason: cols[17]?.replace(/"/g, '') || '',
+                            plan: cols[18]?.replace(/"/g, '') || ''
+                        };
+                    }).filter(item => item && item.id);
+                    setData(parsed);
+                    localStorage.setItem('thaibinh_data_v2', JSON.stringify(parsed));
+                    alert(`Đã nạp thành công ${parsed.length} trạm!`);
+                };
+                reader.readAsText(file);
+            };
+
+            const saveEdit = () => {
+                const newData = data.map(s => s.id === selectedStation.id ? selectedStation : s);
+                setData(newData);
+                localStorage.setItem('thaibinh_data_v2', JSON.stringify(newData));
+                setIsEditing(false);
+            };
+
+            const filteredData = useMemo(() => {
+                return data.filter(s => {
+                    const match = s.name.toLowerCase().includes(searchTerm.toLowerCase()) || s.id.includes(searchTerm);
+                    if (filterType === 'high') return match && s.lossPercent > 10;
+                    return match;
+                });
+            }, [data, searchTerm, filterType]);
+
+            return (
+                <div className="flex h-screen flex-col overflow-hidden text-slate-900">
+                    {/* Header */}
+                    <header className="flex items-center justify-between border-b bg-white px-6 py-3 shadow-sm">
+                        <div className="flex items-center gap-3">
+                            <div className="rounded-xl bg-blue-600 p-2 text-white">
+                                <Zap size={24} fill="currentColor" />
+                            </div>
+                            <div>
+                                <h1 className="text-xl font-extrabold tracking-tight text-slate-800">THÁI BÌNH <span className="text-blue-600">SMART</span></h1>
+                                <p className="text-xs font-medium text-slate-500 uppercase tracking-widest">Hệ thống quản lý tổn thất TBA</p>
+                            </div>
+                        </div>
+                        
+                        <div className="flex items-center gap-4">
+                            <button 
+                                onClick={() => fileInputRef.current.click()}
+                                className="flex items-center gap-2 rounded-lg bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-600 transition hover:bg-blue-100"
+                            >
+                                <Upload size={18} />
+                                <span>Nhập Excel (CSV)</span>
+                            </button>
+                            <input 
+                                type="file" 
+                                ref={fileInputRef} 
+                                onChange={handleFileUpload} 
+                                className="hidden" 
+                                accept=".csv"
+                            />
+                        </div>
+                    </header>
+
+                    <main className="flex flex-1 overflow-hidden p-6 bg-slate-50">
+                        <div className="mx-auto w-full max-w-7xl">
+                            <p className="text-center text-slate-500 mt-10">Vui lòng nhập file để bắt đầu quản lý.</p>
+                        </div>
+                    </main>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot
